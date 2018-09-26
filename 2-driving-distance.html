@@ -69,18 +69,22 @@
 
     const interactivity = new carto.Interactivity(layerVertices);
 
-    interactivity.on('featureClick', event => {
-      if (event.features.length) {
-        const feature = event.features[0];
-        feature.color.blendTo('green', 0);
-        computeDrivingDistance(feature.id, 0.005);
-      }
-    });
+    let source = null;
+    let computing = false;
 
-    interactivity.on('featureClickOut', event => {
-      event.features.map(feature => {
-        feature.color.reset(0);
-      });
+    interactivity.on('featureClick', event => {
+      if (!computing) {
+        if (source) {
+          layerIsoline && layerIsoline.hide();
+          source.color.reset(0);
+          source = null;
+        }
+        if (event.features.length) {
+          source = event.features[0];
+          source.color.blendTo('green', 0);
+          computeDrivingDistance(source.id, 0.005);
+        }
+      }
     });
 
     function computeDrivingDistance(source, cost) {
@@ -98,22 +102,37 @@
            directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
       `);
 
+      computing = true;
+      waitingCursor();
+
       if (layerIsoline) {
         layerIsoline.hide();
-        document.body.className = 'waiting';
         layerIsoline.update(sourceIsoline).then(() => {
           layerIsoline.show();
           setTimeout(() => {
-            document.body.className = '';
+            computing = false;
+            restoreCursor();
           }, 1500);
-        })
+        });
       } else {
         const vizIsoline = new carto.Viz(`
           filter: 0.5
         `);
         layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
         layerIsoline.addTo(map);
+        layerIsoline.on('loaded', () => {
+          computing = false;
+          restoreCursor();
+        });
       }
+    }
+
+    function waitingCursor() {
+      document.body.className = 'waiting';
+    }
+
+    function restoreCursor() {
+      document.body.className = '';
     }
 
     function hideLoader() {
