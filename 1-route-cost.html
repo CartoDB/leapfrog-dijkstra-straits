@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Dijkstra Straits | CARTO</title>
+  <title>Route Cost | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -124,9 +124,10 @@
               path.push(`$cartodb_id==${row.edge}`);
             }
           }
+          totalCost *=  Math.PI / 180 * 6378100;
           vizVertices.filter.blendTo('0.3');
           vizLines.filter.blendTo(path.join(' OR '));
-          console.log(`Total cost (${source} to ${target}): ${totalCost}`);
+          console.log(`Total cost (${source} to ${target}): ${totalCost.toFixed(2)} m`);
 
           computing = false;
           restoreCursor();
