@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dijkstra Straits | CARTO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <!-- Include CARTO VL JS -->
+  <script src="https://libs.cartocdn.com/carto-vl/v0.8.0/carto-vl.js"></script>
+  <!-- Include Mapbox GL JS -->
+  <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
+  <!-- Include Mapbox GL CSS -->
+  <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+  <div id="map"></div>
+  <div id="loader">
+    <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
+      <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
+        <circle class="CDB-LoaderIcon-path" cx="25" cy="25" r="20" fill="none"></circle>
+      </svg>
+    </div>
+  </div>
+  <script>
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      center: [-3.704, 40.421],
+      zoom: 15
+    });
+
+    const USER = 'development';
+    const API_KEY = '730162d337594b567fa5e51919cac5e3061a7197';
+    const SERVER_URL = 'http://development.localhost.lan';
+
+    // const USER = 'testuser';
+    // const API_KEY = '5a80c936dacdf756475c0f1ffe27743359cf6ec6';
+    // const SERVER_URL = 'https://testuser.carto-staging.com';
+
+    carto.setDefaultAuth({
+      user: USER,
+      apiKey: API_KEY
+    });
+    carto.setDefaultConfig({
+      serverURL: SERVER_URL + ':8181'
+    });
+
+    const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
+    const vizVertices = new carto.Viz(`
+      width: 15
+    `);
+    const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
+
+    const sourceLines = new carto.source.Dataset('madrid_ways');
+    const vizLines = new carto.Viz(`
+      width: 5
+      filter: 0
+    `);
+    const layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
+
+    layerLines.addTo(map, 'watername_ocean');
+    layerVertices.addTo(map, 'layer_lines');
+
+    carto.on('loaded',[layerVertices, layerLines], hideLoader);
+
+    const interactivity = new carto.Interactivity(layerVertices);
+
+    let source = null;
+    let target = null;
+
+    interactivity.on('featureClick', event => {
+      if (event.features.length) {
+        const feature = event.features[0];
+        if (!source) {
+          source = feature;
+          source.color.blendTo('blue', 0);
+        } else if (!target) {
+          target = feature;
+          target.color.blendTo('blue', 0);
+          computeDijkstra(source.id, target.id);
+        }
+      } else {
+        vizLines.filter.blendTo('0', 0);
+        source && source.color.reset(0);
+        target && target.color.reset(0);
+        source = null;
+        target = null;
+      }
+    });
+
+    async function requestQuery(query) {
+      const response = await fetch(encodeURI(`${SERVER_URL}:8080/api/v2/sql?q=${query}&api_key=${API_KEY}`));
+      return await response.json();
+    }
+
+    function computeDijkstra(source, target) {
+      requestQuery(`
+        SELECT * FROM pgr_dijkstra(
+          'SELECT cartodb_id AS id,
+               source,
+               target,
+               length AS cost
+              FROM madrid_ways',
+          ${source}, ${target},
+          directed := false);
+      `).then(response => {
+        const path = [];
+        for (row of response.rows) {
+          if (row.edge > 0) {
+            path.push(`$cartodb_id==${row.edge}`);
+          }
+        }
+        vizLines.filter.blendTo(path.join(' OR '));
+      });
+    }
+
+    function hideLoader() {
+      document.getElementById('loader').style.opacity = '0';
+    }
+  </script>
+</body>
+</html>
