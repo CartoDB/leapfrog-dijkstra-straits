@@ -68,26 +68,29 @@
     const interactivity = new carto.Interactivity(layerVertices);
 
     let source = null;
-    let target = null;
+    let targets = [];
+    const NUM_TARGETS = 10;
 
     interactivity.on('featureClick', event => {
       if (event.features.length) {
         const feature = event.features[0];
         if (!source) {
           source = feature;
-          source.color.blendTo('blue', 0);
-        } else if (!target) {
-          target = feature;
-          target.color.blendTo('blue', 0);
-          computeDijkstra(source.id, target.id);
+          feature.color.blendTo('green', 0);
+        } else if (targets.length < NUM_TARGETS) {
+          targets.push(feature);
+          feature.color.blendTo('blue', 0);
+          if (targets.length == NUM_TARGETS) {
+            computeDijkstra(source.id, targets.map(target => target.id));
+          }
         }
-      } else if (source && target) {
+      } else if (source && targets.length == NUM_TARGETS) {
         vizLines.filter.blendTo('0');
         vizVertices.filter.blendTo('1');
         source.color.reset(0);
-        target.color.reset(0);
+        targets.map(target => target.color.reset(0));
         source = null;
-        target = null;
+        targets = [];
       }
     });
 
@@ -96,7 +99,7 @@
       return await response.json();
     }
 
-    function computeDijkstra(source, target) {
+    function computeDijkstra(source, targets) {
       requestQuery(`
         SELECT edge FROM pgr_dijkstra(
           'SELECT cartodb_id AS id,
@@ -104,7 +107,7 @@
              target,
              length AS cost
             FROM madrid_ways',
-          ${source}, ${target},
+          ${source}, ARRAY[${targets.join()}],
           directed := false);
       `).then(response => {
         if (response.error) {
