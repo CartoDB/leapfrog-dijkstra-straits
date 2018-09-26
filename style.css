@@ -7,6 +7,10 @@ body {
   padding: 0;
 }
 
+body.waiting * {
+  cursor: wait !important;
+}
+
 #loader {
   position: absolute;
   background: rgba(46, 60, 67, 0.8);

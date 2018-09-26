@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dijkstra Straits | CARTO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <!-- Include CARTO VL JS -->
+  <script src="https://libs.cartocdn.com/carto-vl/v0.8.0/carto-vl.js"></script>
+  <!-- Include Mapbox GL JS -->
+  <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
+  <!-- Include Mapbox GL CSS -->
+  <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+  <div id="map"></div>
+  <div id="loader">
+    <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
+      <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
+        <circle class="CDB-LoaderIcon-path" cx="25" cy="25" r="20" fill="none"></circle>
+      </svg>
+    </div>
+  </div>
+  <script>
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      center: [-3.704, 40.421],
+      zoom: 15
+    });
+
+    // const USER = 'development';
+    // const API_KEY = '730162d337594b567fa5e51919cac5e3061a7197';
+    // const SERVER_URL_SQL = 'http://development.localhost.lan:8080';
+    // const SERVER_URL_MAPS = 'http://development.localhost.lan:8181';
+
+    const USER = 'testuser';
+    const API_KEY = '5a80c936dacdf756475c0f1ffe27743359cf6ec6';
+    const SERVER_URL_SQL = 'https://testuser.carto-staging.com';
+    const SERVER_URL_MAPS = 'https://testuser.carto-staging.com';
+
+    carto.setDefaultAuth({
+      user: USER,
+      apiKey: API_KEY
+    });
+    carto.setDefaultConfig({
+      serverURL: SERVER_URL_MAPS
+    });
+
+    const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
+    const vizVertices = new carto.Viz(`
+      width: 15
+    `);
+    const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
+
+    const sourceLines = new carto.source.Dataset('madrid_ways');
+    const vizLines = new carto.Viz(`
+      width: 5
+      filter: 0
+    `);
+    const layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
+
+    let layerIsoline = null;
+
+    layerVertices.addTo(map, 'watername_ocean');
+    layerLines.addTo(map);
+
+    carto.on('loaded',[layerVertices, layerLines], hideLoader);
+
+    const interactivity = new carto.Interactivity(layerVertices);
+
+    interactivity.on('featureClick', event => {
+      if (event.features.length) {
+        const feature = event.features[0];
+        feature.color.blendTo('green', 0);
+        computeDrivingDistance(feature.id, 0.005);
+      }
+    });
+
+    interactivity.on('featureClickOut', event => {
+      event.features.map(feature => {
+        feature.color.reset(0);
+      });
+    });
+
+    function computeDrivingDistance(source, cost) {
+      const sourceIsoline = new carto.source.SQL(`
+        SELECT
+          1 AS cartodb_id,
+          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
+        FROM pgr_drivingDistance(
+          'SELECT cartodb_id AS id,
+            source,
+            target,
+            length AS cost
+           FROM madrid_ways',
+           ${source}, ${cost},
+           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
+      `);
+
+      if (layerIsoline) {
+        layerIsoline.hide();
+        document.body.className = 'waiting';
+        layerIsoline.update(sourceIsoline).then(() => {
+          layerIsoline.show();
+          setTimeout(() => {
+            document.body.className = '';
+          }, 1500);
+        })
+      } else {
+        const vizIsoline = new carto.Viz(`
+          filter: 0.5
+        `);
+        layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
+        layerIsoline.addTo(map);
+      }
+    }
+
+    function hideLoader() {
+      document.getElementById('loader').style.opacity = '0';
+    }
+  </script>
+</body>
+</html>
