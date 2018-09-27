@@ -11,3 +11,10 @@ WITH envelope AS (
   FROM envelope, width, height
 ) SELECT row_number() over () as cartodb_id, grid.the_geom FROM grid;
 
+
+-- Add the cid (Cell ID) to the tables
+alter table madrid_ways add column cid bigint;
+alter table madrid_ways_vertices_pgr add column cid bigint;
+update madrid_ways mw set cid = g.cartodb_id from madrid_grid g where st_intersects(mw.the_geom, g.the_geom);
+update madrid_ways_vertices_pgr mwv set cid = g.cartodb_id from madrid_grid g where st_intersects(mwv.the_geom, g.the_geom);
+
