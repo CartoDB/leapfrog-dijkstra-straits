@@ -42,8 +42,8 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-      center: [-3.704, 40.421],
-      zoom: 15
+      center: [-3.703, 40.4215],
+      zoom: 15.5
     });
 
     // const USER = 'development';
@@ -125,7 +125,7 @@
       const huevofrito = document.getElementById('huevofrito').checked;
       const vizIsoline = new carto.Viz(`
         color: ramp(top($type, 2), ${huevofrito ? '[white, yellow]' : 'PRISM'})
-        filter: ${huevofrito ? '0.8' : '0.5'}
+        filter: ${huevofrito ? '0.8' : '0.5'} // * animation(linear($cartodb_id, 2.5, -3), 10, fade(0.5,100))
       `);
 
       computing = true;
