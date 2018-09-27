@@ -14,6 +14,19 @@
 </head>
 <body>
   <div id="map"></div>
+  <aside class="toolbox">
+    <div class="box">
+      <header>
+        <h1>Route Cost</h1>
+      </header>
+      <section>
+        <p class="description open-sans">Select two nodes</p>
+        <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
+        <!-- <p id="source" class="description open-sans" style="font-size: 16px;"></p>
+        <p id="target" class="description open-sans" style="font-size: 16px;"></p> -->
+      </section>
+    </div>
+  </aside>
   <div id="loader">
     <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
       <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
@@ -80,6 +93,9 @@
           target.color.reset(0);
           source = null;
           target = null;
+          document.getElementById('cost').innerHTML = '';
+          // document.getElementById('source').innerHTML = '';
+          // document.getElementById('target').innerHTML = '';
         }
       }
     });
@@ -126,7 +142,9 @@
         layerLines.viz.filter.blendTo('1');
         layerVertices.viz.filter.blendTo('0.3');
         const totalCost = layerLines.viz.variables.totalCost.value *  Math.PI / 180 * 6378100;
-        console.log(`Total cost (${source} to ${target}): ${totalCost.toFixed(2)} m`);
+        document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
+        // document.getElementById('source').innerHTML = `Source: ${source}`;
+        // document.getElementById('target').innerHTML = `Target: ${target}`;
         computing = false;
         restoreCursor();
       });
