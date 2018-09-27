@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Isolines Grid | CARTO</title>
+  <title>Contours Grid | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -17,18 +17,8 @@
   <aside class="toolbox">
     <div class="box">
       <header>
-        <h1>Isolines Grid</h1>
+        <h1>Contours Grid</h1>
       </header>
-      <section>
-        <div style="display:flex;margin:12px 4px 4px 4px">
-          <p class="description open-sans" style="margin:2px 8px 2px 2px">Max cost (m)</p>
-          <input id="maxcost" type="text" value="500" style="width:120px">
-        </div>
-        <div style="display:flex;margin:12px 4px 4px 4px">
-          <p class="description open-sans" style="margin:2px 8px 2px 2px">Huevo frito</p>
-          <input id="huevofrito" type="checkbox">
-        </div>
-      </section>
     </div>
   </aside>
   <div id="loader">
@@ -83,71 +73,58 @@
 
     let source = null;
     let computing = false;
-    let layerIsoline = null;
+    let layerContours = null;
 
     const interactivity = new carto.Interactivity(layerGrid);
 
     interactivity.on('featureClick', async (event) => {
       if (!computing) {
         if (source) {
-          layerIsoline && layerIsoline.hide();
+          layerContours && layerContours.hide();
           source.color.reset(0);
           source = null;
         }
         if (event.features.length) {
           source = event.features[0];
-          source.color.blendTo('green', 0);
-          let maxCost = document.getElementById('maxcost').value;
-          maxCost *= 180 / Math.PI / 6378100;
-          computeDrivingDistance(source.id, maxCost);
+          computeContours(source.id);
         }
       }
     });
 
-    function computeDrivingDistance(source, cost) {
-      const sourceIsoline = new carto.source.SQL(`
-        SELECT
-          1 AS cartodb_id,
-          '1' AS type,
-          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
-        FROM pgr_drivingDistance(
-          'SELECT cartodb_id AS id,
-            source,
-            target,
+    function computeContours(source, cost) {
+      const sourceContours = new carto.source.SQL(`
+        WITH cells AS (
+          SELECT
+            origin_cell_id AS cid,
             length AS cost
-           FROM madrid_ways',
-           ${source}, ${cost},
-           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
-        UNION
-        SELECT
-          2 AS cartodb_id,
-          '2' AS type,
-          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
-        FROM pgr_drivingDistance(
-          'SELECT cartodb_id AS id,
-            source,
-            target,
+          FROM madrid_od_matrix WHERE target_cell_id=${source}
+          UNION
+          SELECT
+            target_cell_id AS cid,
             length AS cost
-           FROM madrid_ways',
-           ${source}, ${cost/2},
-           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
+          FROM madrid_od_matrix WHERE origin_cell_id=${source}
+        )
+        SELECT
+          madrid_grid.cartodb_id,
+          madrid_grid.the_geom_webmercator,
+          cells.cost
+        FROM cells LEFT JOIN madrid_grid ON madrid_grid.cartodb_id=cells.cid
       `);
-      const huevofrito = document.getElementById('huevofrito').checked;
-      const vizIsoline = new carto.Viz(`
-        color: ramp(top($type, 2), ${huevofrito ? '[white, yellow]' : 'PRISM'})
-        filter: ${huevofrito ? '0.8' : '0.5'} // * animation(linear($cartodb_id, 2.5, -3), 10, fade(0.5,100))
+      const vizContours = new carto.Viz(`
+        color: ramp(buckets($cost, [0, 0.001, 0.005, 0.01]), PRISM)
+        filter: animation(linear($cost, 0, 0.1), 15, fade(0.5,100)) * 0.8
       `);
 
       computing = true;
       waitingCursor();
 
-      if (layerIsoline) {
-        layerIsoline.remove();
+      if (layerContours) {
+        layerContours.remove();
       }
 
-      layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
-      layerIsoline.addTo(map);
-      layerIsoline.on('loaded', () => {
+      layerContours = new carto.Layer('layer_contours', sourceContours, vizContours);
+      layerContours.addTo(map);
+      layerContours.on('loaded', () => {
         computing = false;
         restoreCursor();
       });
