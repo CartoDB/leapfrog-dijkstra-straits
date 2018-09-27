@@ -1,0 +1,13 @@
+-- A 10x10 grid
+WITH envelope AS (
+  SELECT ST_SetSRID(ST_Envelope(ST_Collect(the_geom)), 4326) geom
+  FROM madrid_ways_vertices_pgr
+), width AS (
+  SELECT (ST_XMax(geom) - ST_XMin(geom)) / 10 AS w FROM envelope
+), height AS (
+  SELECT (ST_YMax(geom) - ST_YMin(geom)) / 10 AS h FROM envelope
+), grid AS (
+  SELECT CDB_RectangleGrid(envelope.geom, width.w, height.h) the_geom
+  FROM envelope, width, height
+) SELECT row_number() over () as cartodb_id, grid.the_geom FROM grid;
+
