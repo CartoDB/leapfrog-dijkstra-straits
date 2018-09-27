@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Route Cost | CARTO</title>
+  <title>Multiple Routes | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -10,23 +10,10 @@
   <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
   <!-- Include Mapbox GL CSS -->
   <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
-  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
   <div id="map"></div>
-  <aside class="toolbox">
-    <div class="box">
-      <header>
-        <h1>Route Cost</h1>
-      </header>
-      <section>
-        <p class="description open-sans">Select two nodes</p>
-        <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
-        <!-- <p id="source" class="description open-sans" style="font-size: 16px;"></p>
-        <p id="target" class="description open-sans" style="font-size: 16px;"></p> -->
-      </section>
-    </div>
-  </aside>
   <div id="loader">
     <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
       <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
@@ -68,9 +55,10 @@
     layerVertices.on('loaded', hideLoader);
 
     let source = null;
-    let target = null;
+    let targets = [];
     let computing = false;
     let layerLines = null;
+    const NUM_TARGETS = 10;
 
     const interactivity = new carto.Interactivity(layerVertices);
 
@@ -81,50 +69,46 @@
           if (!source) {
             source = feature;
             source.color.blendTo('green', 0);
-          } else if (!target) {
-            target = feature;
-            target.color.blendTo('blue', 0);
-            computeDijkstra(source.id, target.id);
+          } else if (targets.length < NUM_TARGETS) {
+            targets.push(feature);
+            feature.color.blendTo('blue', 0);
+            if (targets.length == NUM_TARGETS) {
+              computeDijkstra(source.id, targets.map(target => target.id));
+            }
           }
-        } else if (source && target) {
+        } else if (source && targets.length == NUM_TARGETS) {
           layerLines && layerLines.viz.filter.blendTo('0');
           layerVertices && layerVertices.viz.filter.blendTo('1');
           source.color.reset(0);
-          target.color.reset(0);
+          targets.map(target => target.color.reset(0));
           source = null;
-          target = null;
-          document.getElementById('cost').innerHTML = '';
-          // document.getElementById('source').innerHTML = '';
-          // document.getElementById('target').innerHTML = '';
+          targets = [];
         }
       }
     });
 
-    function computeDijkstra(source, target) {
+    function computeDijkstra(source, targets) {
       const sourceLines = new carto.source.SQL(`
         WITH path AS (
           SELECT
-            edge,
-            cost
+            edge
           FROM pgr_dijkstra(
             'SELECT cartodb_id AS id,
                source,
                target,
                length AS cost
               FROM madrid_ways',
-            ${source}, ${target},
+            ${source}, ARRAY[${targets.join()}],
             directed := false)
         )
         SELECT
           cartodb_id,
           the_geom,
-          the_geom_webmercator,
-          path.cost
+          the_geom_webmercator
         FROM madrid_ways, path
         WHERE cartodb_id=path.edge
       `);
       const vizLines = new carto.Viz(`
-        @totalCost: globalSum($cost)
         width: 5
         filter: 0
       `);
@@ -141,18 +125,9 @@
       layerLines.on('loaded', () => {
         layerLines.viz.filter.blendTo('1');
         layerVertices.viz.filter.blendTo('0.3');
-        const totalCost = layerLines.viz.variables.totalCost.value *  Math.PI / 180 * 6378100;
-        document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
-        // document.getElementById('source').innerHTML = `Source: ${source}`;
-        // document.getElementById('target').innerHTML = `Target: ${target}`;
         computing = false;
         restoreCursor();
       });
-    }
-
-    async function requestQuery(query) {
-      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
-      return await response.json();
     }
 
     function waitingCursor() {

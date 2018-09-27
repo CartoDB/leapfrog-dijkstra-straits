@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Isolines Edges Buffer | CARTO</title>
+  <title>Isolines Concave Hull | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -10,19 +10,19 @@
   <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
   <!-- Include Mapbox GL CSS -->
   <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
-  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
   <div id="map"></div>
   <aside class="toolbox">
     <div class="box">
       <header>
-        <h1>Isolines Edges Buffer</h1>
+        <h1>Isolines Concave Hull</h1>
       </header>
       <section>
         <div style="display:flex;margin:12px 4px 4px 4px">
           <p class="description open-sans" style="margin:2px 8px 2px 2px">Max cost (m)</p>
-          <input id="maxcost" type="text" value="300" style="width:120px">
+          <input id="maxcost" type="text" value="500" style="width:120px">
         </div>
       </section>
     </div>
@@ -92,17 +92,34 @@
 
     function computeDrivingDistance(source, cost) {
       const sourceIsoline = new carto.source.SQL(`
-SELECT 1 cartodb_id, st_union(st_buffer(the_geom_webmercator, 60)) the_geom_webmercator FROM pgr_drivingDistance(
- 'SELECT cartodb_id AS id,
-  source,
-  target,
-  length AS cost
-  FROM madrid_ways',
-  ${source}, ${cost},
-directed := false) dd LEFT JOIN madrid_ways mw ON dd.edge = mw.cartodb_id
+        SELECT
+          1 AS cartodb_id,
+          '1' AS type,
+          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
+        FROM pgr_drivingDistance(
+          'SELECT cartodb_id AS id,
+            source,
+            target,
+            length AS cost
+           FROM madrid_ways',
+           ${source}, ${cost},
+           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
+        UNION
+        SELECT
+          2 AS cartodb_id,
+          '2' AS type,
+          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
+        FROM pgr_drivingDistance(
+          'SELECT cartodb_id AS id,
+            source,
+            target,
+            length AS cost
+           FROM madrid_ways',
+           ${source}, ${cost/2},
+           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
       `);
       const vizIsoline = new carto.Viz(`
-        width: 20
+        color: ramp(top($type, 2), PRISM)
         filter: 0.5
       `);
 

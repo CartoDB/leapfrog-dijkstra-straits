@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Isolines Concave Hull | CARTO</title>
+  <title>Route Cost | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -10,20 +10,20 @@
   <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
   <!-- Include Mapbox GL CSS -->
   <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
-  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
   <div id="map"></div>
   <aside class="toolbox">
     <div class="box">
       <header>
-        <h1>Isolines Concave Hull</h1>
+        <h1>Route Cost</h1>
       </header>
       <section>
-        <div style="display:flex;margin:12px 4px 4px 4px">
-          <p class="description open-sans" style="margin:2px 8px 2px 2px">Max cost (m)</p>
-          <input id="maxcost" type="text" value="300" style="width:120px">
-        </div>
+        <p class="description open-sans">Select two nodes</p>
+        <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
+        <!-- <p id="source" class="description open-sans" style="font-size: 16px;"></p>
+        <p id="target" class="description open-sans" style="font-size: 16px;"></p> -->
       </section>
     </div>
   </aside>
@@ -68,59 +68,91 @@
     layerVertices.on('loaded', hideLoader);
 
     let source = null;
+    let target = null;
     let computing = false;
-    let layerIsoline = null;
+    let layerLines = null;
 
     const interactivity = new carto.Interactivity(layerVertices);
 
     interactivity.on('featureClick', event => {
       if (!computing) {
-        if (source) {
-          layerIsoline && layerIsoline.hide();
-          source.color.reset(0);
-          source = null;
-        }
         if (event.features.length) {
-          source = event.features[0];
-          source.color.blendTo('green', 0);
-          let maxCost = document.getElementById('maxcost').value;
-          maxCost *= 180 / Math.PI / 6378100;
-          computeDrivingDistance(source.id, maxCost);
+          const feature = event.features[0];
+          if (!source) {
+            source = feature;
+            source.color.blendTo('green', 0);
+          } else if (!target) {
+            target = feature;
+            target.color.blendTo('blue', 0);
+            computeDijkstra(source.id, target.id);
+          }
+        } else if (source && target) {
+          layerLines && layerLines.viz.filter.blendTo('0');
+          layerVertices && layerVertices.viz.filter.blendTo('1');
+          source.color.reset(0);
+          target.color.reset(0);
+          source = null;
+          target = null;
+          document.getElementById('cost').innerHTML = '';
+          // document.getElementById('source').innerHTML = '';
+          // document.getElementById('target').innerHTML = '';
         }
       }
     });
 
-    function computeDrivingDistance(source, cost) {
-      const sourceIsoline = new carto.source.SQL(`
+    function computeDijkstra(source, target) {
+      const sourceLines = new carto.source.SQL(`
+        WITH path AS (
+          SELECT
+            edge,
+            cost
+          FROM pgr_dijkstra(
+            'SELECT cartodb_id AS id,
+               source,
+               target,
+               length AS cost
+              FROM madrid_ways',
+            ${source}, ${target},
+            directed := false)
+        )
         SELECT
-          1 AS cartodb_id,
-          ST_ConcaveHull(st_collect(the_geom_webmercator), 0.99) AS the_geom_webmercator
-        FROM pgr_drivingDistance(
-          'SELECT cartodb_id AS id,
-            source,
-            target,
-            length AS cost
-           FROM madrid_ways',
-           ${source}, ${cost},
-           directed := false) dd LEFT JOIN madrid_ways_vertices_pgr mwv ON dd.node=mwv.cartodb_id
+          cartodb_id,
+          the_geom,
+          the_geom_webmercator,
+          path.cost
+        FROM madrid_ways, path
+        WHERE cartodb_id=path.edge
       `);
-      const vizIsoline = new carto.Viz(`
-        filter: 0.5
+      const vizLines = new carto.Viz(`
+        @totalCost: globalSum($cost)
+        width: 5
+        filter: 0
       `);
 
       computing = true;
       waitingCursor();
 
-      if (layerIsoline) {
-        layerIsoline.remove();
+      if (layerLines) {
+        layerLines.remove();
       }
 
-      layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
-      layerIsoline.addTo(map);
-      layerIsoline.on('loaded', () => {
+      layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
+      layerLines.addTo(map);
+      layerLines.on('loaded', () => {
+        layerLines.viz.filter.blendTo('1');
+        layerVertices.viz.filter.blendTo('0.3');
+        const totalCost = layerLines.viz.variables.totalCost.value *  Math.PI / 180 * 6378100;
+        document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
+        // document.getElementById('source').innerHTML = `Source: ${source}`;
+        // document.getElementById('target').innerHTML = `Target: ${target}`;
         computing = false;
         restoreCursor();
       });
+    }
+
+    async function requestQuery(query) {
+      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
+      return await response.json();
     }
 
     function waitingCursor() {

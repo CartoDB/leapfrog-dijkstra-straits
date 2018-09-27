@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Multiple Routes | CARTO</title>
+  <title>Agg Routes Cost | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -10,10 +10,23 @@
   <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
   <!-- Include Mapbox GL CSS -->
   <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
-  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
   <div id="map"></div>
+  <aside class="toolbox">
+    <div class="box">
+      <header>
+        <h1>Agg Route Cost</h1>
+      </header>
+      <section>
+        <p class="description open-sans">Select two groups of 5 nodes</p>
+        <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
+        <!-- <p id="sources" class="description open-sans" style="font-size: 16px;"></p>
+        <p id="targets" class="description open-sans" style="font-size: 16px;"></p> -->
+      </section>
+    </div>
+  </aside>
   <div id="loader">
     <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
       <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
@@ -48,17 +61,19 @@
     });
 
     const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
-    const vizVertices = new carto.Viz('width: 15');
+    const vizVertices = new carto.Viz(`
+      width: 15
+    `);
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
     layerVertices.addTo(map, 'watername_ocean');
     layerVertices.on('loaded', hideLoader);
 
-    let source = null;
+    let sources = [];
     let targets = [];
     let computing = false;
     let layerLines = null;
-    const NUM_TARGETS = 10;
+    const NUM_TARGETS = 5;
 
     const interactivity = new carto.Interactivity(layerVertices);
 
@@ -66,49 +81,55 @@
       if (!computing) {
         if (event.features.length) {
           const feature = event.features[0];
-          if (!source) {
-            source = feature;
-            source.color.blendTo('green', 0);
+          if (sources.length < NUM_TARGETS) {
+            sources.push(feature);
+            feature.color.blendTo('green', 0);
           } else if (targets.length < NUM_TARGETS) {
             targets.push(feature);
             feature.color.blendTo('blue', 0);
             if (targets.length == NUM_TARGETS) {
-              computeDijkstra(source.id, targets.map(target => target.id));
+              computeDijkstra(sources.map(s => s.id), targets.map(t => t.id));
             }
           }
-        } else if (source && targets.length == NUM_TARGETS) {
+        } else if (sources.length == NUM_TARGETS && targets.length == NUM_TARGETS) {
           layerLines && layerLines.viz.filter.blendTo('0');
           layerVertices && layerVertices.viz.filter.blendTo('1');
-          source.color.reset(0);
+          sources.map(source => source.color.reset(0));
           targets.map(target => target.color.reset(0));
-          source = null;
+          sources = [];
           targets = [];
+          document.getElementById('cost').innerHTML = '';
+          // document.getElementById('source').innerHTML = '';
+          // document.getElementById('target').innerHTML = '';
         }
       }
     });
 
-    function computeDijkstra(source, targets) {
+    function computeDijkstra(sources, targets) {
       const sourceLines = new carto.source.SQL(`
         WITH path AS (
           SELECT
-            edge
+            edge,
+            cost
           FROM pgr_dijkstra(
             'SELECT cartodb_id AS id,
                source,
                target,
                length AS cost
               FROM madrid_ways',
-            ${source}, ARRAY[${targets.join()}],
+            ARRAY[${sources.join()}], ARRAY[${targets.join()}],
             directed := false)
         )
         SELECT
           cartodb_id,
           the_geom,
-          the_geom_webmercator
+          the_geom_webmercator,
+          path.cost
         FROM madrid_ways, path
         WHERE cartodb_id=path.edge
       `);
       const vizLines = new carto.Viz(`
+        @totalCost: globalSum($cost)
         width: 5
         filter: 0
       `);
@@ -125,6 +146,10 @@
       layerLines.on('loaded', () => {
         layerLines.viz.filter.blendTo('1');
         layerVertices.viz.filter.blendTo('0.3');
+        const totalCost = layerLines.viz.variables.totalCost.value * Math.PI / 180 * 6378100 / (NUM_TARGETS ** 2);
+        document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
+        // document.getElementById('sources').innerHTML = `Sources: ${sources.join()}`;
+        // document.getElementById('targets').innerHTML = `Targets: ${targets.join()}`;
         computing = false;
         restoreCursor();
       });

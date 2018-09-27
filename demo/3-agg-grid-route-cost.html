@@ -10,7 +10,7 @@
   <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
   <!-- Include Mapbox GL CSS -->
   <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
-  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
   <div id="map"></div>
@@ -38,7 +38,7 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-      center: [-3.704, 40.423],
+      center: [-3.704, 40.422],
       zoom: 15
     });
 
@@ -92,7 +92,8 @@
             sourcesData = await requestQuery(`
               SELECT v.cartodb_id AS id
               FROM madrid_ways_vertices_pgr v, madrid_grid g
-              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom);
+              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
+              LIMIT 40
             `);
             if (sourcesData.rows.length) {
               source = feature;
@@ -102,7 +103,8 @@
             targetData = await requestQuery(`
               SELECT v.cartodb_id AS id
               FROM madrid_ways_vertices_pgr v, madrid_grid g
-              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom);
+              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
+              LIMIT 40
             `);
             if (targetData.rows.length) {
               target = feature;
