@@ -14,6 +14,13 @@
 </head>
 <body>
   <div id="map"></div>
+  <aside class="toolbox">
+    <div class="box">
+      <header>
+        <h1>Grid Generation</h1>
+      </header>
+    </div>
+  </aside>
   <div id="loader">
     <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
       <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
@@ -52,7 +59,6 @@
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
     const size = 10;
-
     const sourceGrid = new carto.source.SQL(`
       WITH envelope AS (
         SELECT ST_SetSRID(ST_Envelope(ST_Collect(the_geom_webmercator)), 3857) geom
