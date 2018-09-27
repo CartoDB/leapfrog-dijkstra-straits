@@ -1,0 +1,84 @@
+CREATE OR REPLACE FUNCTION leapfrog_rectanglegrid(ext geometry, width double precision, height double precision, origin geometry DEFAULT NULL::geometry, maxcells integer DEFAULT (512 * 512))
+ RETURNS SETOF geometry
+ LANGUAGE plpgsql
+ IMMUTABLE PARALLEL SAFE
+AS $function$
+DECLARE
+  h GEOMETRY; -- rectangle cell
+  hstep FLOAT8; -- horizontal step
+  vstep FLOAT8; -- vertical step
+  hw FLOAT8; -- half width
+  hh FLOAT8; -- half height
+  vstart FLOAT8;
+  hstart FLOAT8;
+  hend FLOAT8;
+  vend FLOAT8;
+  xoff FLOAT8;
+  yoff FLOAT8;
+  xgrd FLOAT8;
+  ygrd FLOAT8;
+  x FLOAT8;
+  y FLOAT8;
+  srid INTEGER;
+BEGIN
+
+  srid := ST_SRID(ext);
+
+  xoff := 0;
+  yoff := 0;
+
+  IF origin IS NOT NULL THEN
+    IF ST_SRID(origin) != srid THEN
+      RAISE EXCEPTION 'SRID mismatch between extent (%) and origin (%)', srid, ST_SRID(origin);
+    END IF;
+    xoff := ST_X(origin);
+    yoff := ST_Y(origin);
+  END IF;
+
+  --RAISE DEBUG 'X offset: %', xoff;
+  --RAISE DEBUG 'Y offset: %', yoff;
+
+  hw := width/2.0;
+  hh := height/2.0;
+
+  xgrd := hw;
+  ygrd := hh;
+  --RAISE DEBUG 'X grid size: %', xgrd;
+  --RAISE DEBUG 'Y grid size: %', ygrd;
+
+  hstep := width;
+  vstep := height;
+
+  -- Tweak horizontal start on hstep grid from origin 
+  hstart := xoff + ceil((ST_XMin(ext)-xoff)/hstep)*hstep;
+  --RAISE DEBUG 'hstart: %', hstart;
+
+  -- Tweak vertical start on vstep grid from origin 
+  vstart := yoff + ceil((ST_Ymin(ext)-yoff)/vstep)*vstep;
+  --RAISE DEBUG 'vstart: %', vstart;
+
+  hend := ST_XMax(ext);
+  vend := ST_YMax(ext);
+
+  --RAISE DEBUG 'hend: %', hend;
+  --RAISE DEBUG 'vend: %', vend;
+
+  If maxcells IS NOT NULL AND maxcells > 0 THEN
+    IF ((hend - hstart)/hstep * (vend - vstart)/vstep)::integer > maxcells THEN
+        RAISE EXCEPTION 'The requested grid is too big to be rendered';
+    END IF;
+  END IF;
+
+  x := hstart;
+  WHILE x < hend LOOP -- over X
+    y := vstart;
+    h := ST_MakeEnvelope(x-hw, y-hh, x+hw, y+hh, srid);
+    WHILE y < vend LOOP -- over Y
+      RETURN NEXT h;
+      h := ST_Translate(h, 0, vstep);
+    END LOOP;
+  END LOOP;
+
+  RETURN;
+END
+$function$;
