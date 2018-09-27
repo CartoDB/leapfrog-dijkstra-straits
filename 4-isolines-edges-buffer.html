@@ -48,29 +48,17 @@
     });
 
     const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
-    const vizVertices = new carto.Viz(`
-      width: 15
-    `);
+    const vizVertices = new carto.Viz('width: 15');
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
-    const sourceLines = new carto.source.Dataset('madrid_ways');
-    const vizLines = new carto.Viz(`
-      width: 5
-      filter: 0
-    `);
-    const layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
-
-    let layerIsoline = null;
-
     layerVertices.addTo(map, 'watername_ocean');
-    layerLines.addTo(map);
-
-    carto.on('loaded',[layerVertices, layerLines], hideLoader);
-
-    const interactivity = new carto.Interactivity(layerVertices);
+    layerVertices.on('loaded', hideLoader);
 
     let source = null;
     let computing = false;
+    let layerIsoline = null;
+
+    const interactivity = new carto.Interactivity(layerVertices);
 
     interactivity.on('featureClick', event => {
       if (!computing) {
@@ -98,31 +86,24 @@ SELECT 1 cartodb_id, st_union(st_buffer(the_geom_webmercator, 60)) the_geom_webm
   ${source}, ${cost},
 directed := false) dd LEFT JOIN madrid_ways mw ON dd.edge = mw.cartodb_id
       `);
+      const vizIsoline = new carto.Viz(`
+        width: 20
+        filter: 0.5
+      `);
 
       computing = true;
       waitingCursor();
 
       if (layerIsoline) {
-        layerIsoline.hide();
-        layerIsoline.update(sourceIsoline).then(() => {
-          layerIsoline.show();
-          setTimeout(() => {
-            computing = false;
-            restoreCursor();
-          }, 1500);
-        })
-      } else {
-        const vizIsoline = new carto.Viz(`
-          width: 20
-          filter: 0.5
-        `);
-        layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
-        layerIsoline.addTo(map);
-        layerIsoline.on('loaded', () => {
-          computing = false;
-          restoreCursor();
-        });
+        layerIsoline.remove();
       }
+
+      layerIsoline = new carto.Layer('layer_isoline', sourceIsoline, vizIsoline);
+      layerIsoline.addTo(map);
+      layerIsoline.on('loaded', () => {
+        computing = false;
+        restoreCursor();
+      });
     }
 
     function waitingCursor() {

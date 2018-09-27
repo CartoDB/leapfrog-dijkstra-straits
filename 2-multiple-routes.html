@@ -48,29 +48,19 @@
     });
 
     const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
-    const vizVertices = new carto.Viz(`
-      width: 15
-    `);
+    const vizVertices = new carto.Viz('width: 15');
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
-    const sourceLines = new carto.source.Dataset('madrid_ways');
-    const vizLines = new carto.Viz(`
-      width: 5
-      filter: 0
-    `);
-    const layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
-
     layerVertices.addTo(map, 'watername_ocean');
-    layerLines.addTo(map);
-
-    carto.on('loaded',[layerVertices, layerLines], hideLoader);
-
-    const interactivity = new carto.Interactivity(layerVertices);
+    layerVertices.on('loaded', hideLoader);
 
     let source = null;
     let targets = [];
     let computing = false;
-    const NUM_TARGETS = 4;
+    let layerLines = null;
+    const NUM_TARGETS = 10;
+
+    const interactivity = new carto.Interactivity(layerVertices);
 
     interactivity.on('featureClick', event => {
       if (!computing) {
@@ -78,7 +68,7 @@
           const feature = event.features[0];
           if (!source) {
             source = feature;
-            feature.color.blendTo('green', 0);
+            source.color.blendTo('green', 0);
           } else if (targets.length < NUM_TARGETS) {
             targets.push(feature);
             feature.color.blendTo('blue', 0);
@@ -87,8 +77,8 @@
             }
           }
         } else if (source && targets.length == NUM_TARGETS) {
-          vizLines.filter.blendTo('0');
-          vizVertices.filter.blendTo('1');
+          layerLines && layerLines.viz.filter.blendTo('0');
+          layerVertices && layerVertices.viz.filter.blendTo('1');
           source.color.reset(0);
           targets.map(target => target.color.reset(0));
           source = null;
@@ -97,40 +87,46 @@
       }
     });
 
-    async function requestQuery(query) {
-      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
-      return await response.json();
-    }
-
     function computeDijkstra(source, targets) {
+      const sourceLines = new carto.source.SQL(`
+        WITH path AS (
+          SELECT
+            edge
+          FROM pgr_dijkstra(
+            'SELECT cartodb_id AS id,
+               source,
+               target,
+               length AS cost
+              FROM madrid_ways',
+            ${source}, ARRAY[${targets.join()}],
+            directed := false)
+        )
+        SELECT
+          cartodb_id,
+          the_geom,
+          the_geom_webmercator
+        FROM madrid_ways, path
+        WHERE cartodb_id=path.edge
+      `);
+      const vizLines = new carto.Viz(`
+        width: 5
+        filter: 0
+      `);
+
       computing = true;
       waitingCursor();
 
-      requestQuery(`
-        SELECT edge FROM pgr_dijkstra(
-          'SELECT cartodb_id AS id,
-             source,
-             target,
-             length AS cost
-            FROM madrid_ways',
-          ${source}, ARRAY[${targets.join()}],
-          directed := false);
-      `).then(response => {
-        if (response.error) {
-          console.warn(response.error);
-        } else {
-          const path = [];
-          for (row of response.rows) {
-            if (row.edge > 0) {
-              path.push(`$cartodb_id==${row.edge}`);
-            }
-          }
-          vizVertices.filter.blendTo('0.3');
-          vizLines.filter.blendTo(path.join(' OR '));
+      if (layerLines) {
+        layerLines.remove();
+      }
 
-          computing = false;
-          restoreCursor();
-        }
+      layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
+      layerLines.addTo(map);
+      layerLines.on('loaded', () => {
+        layerLines.viz.filter.blendTo('1');
+        layerVertices.viz.filter.blendTo('0.3');
+        computing = false;
+        restoreCursor();
       });
     }
 

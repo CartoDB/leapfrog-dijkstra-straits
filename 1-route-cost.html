@@ -48,28 +48,18 @@
     });
 
     const sourceVertices = new carto.source.Dataset('madrid_ways_vertices_pgr');
-    const vizVertices = new carto.Viz(`
-      width: 15
-    `);
+    const vizVertices = new carto.Viz('width: 15');
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
-    const sourceLines = new carto.source.Dataset('madrid_ways');
-    const vizLines = new carto.Viz(`
-      width: 5
-      filter: 0
-    `);
-    const layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
-
     layerVertices.addTo(map, 'watername_ocean');
-    layerLines.addTo(map);
-
-    carto.on('loaded',[layerVertices, layerLines], hideLoader);
-
-    const interactivity = new carto.Interactivity(layerVertices);
+    layerVertices.on('loaded', hideLoader);
 
     let source = null;
     let target = null;
     let computing = false;
+    let layerLines = null;
+
+    const interactivity = new carto.Interactivity(layerVertices);
 
     interactivity.on('featureClick', event => {
       if (!computing) {
@@ -84,8 +74,8 @@
             computeDijkstra(source.id, target.id);
           }
         } else if (source && target) {
-          vizLines.filter.blendTo('0');
-          vizVertices.filter.blendTo('1');
+          layerLines && layerLines.viz.filter.blendTo('0');
+          layerVertices && layerVertices.viz.filter.blendTo('1');
           source.color.reset(0);
           target.color.reset(0);
           source = null;
@@ -94,45 +84,57 @@
       }
     });
 
-    async function requestQuery(query) {
-      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
-      return await response.json();
-    }
-
     function computeDijkstra(source, target) {
+      const sourceLines = new carto.source.SQL(`
+        WITH path AS (
+          SELECT
+            edge,
+            cost
+          FROM pgr_dijkstra(
+            'SELECT cartodb_id AS id,
+               source,
+               target,
+               length AS cost
+              FROM madrid_ways',
+            ${source}, ${target},
+            directed := false)
+        )
+        SELECT
+          cartodb_id,
+          the_geom,
+          the_geom_webmercator,
+          path.cost
+        FROM madrid_ways, path
+        WHERE cartodb_id=path.edge
+      `);
+      const vizLines = new carto.Viz(`
+        @totalCost: globalSum($cost)
+        width: 5
+        filter: 0
+      `);
+
       computing = true;
       waitingCursor();
 
-      requestQuery(`
-        SELECT edge, cost FROM pgr_dijkstra(
-          'SELECT cartodb_id AS id,
-             source,
-             target,
-             length AS cost
-            FROM madrid_ways',
-          ${source}, ${target},
-          directed := false)
-      `).then(response => {
-        if (response.error) {
-          console.warn(response.error);
-        } else {
-          const path = [];
-          let totalCost = 0;
-          for (row of response.rows) {
-            totalCost += row.cost;
-            if (row.edge > 0) {
-              path.push(`$cartodb_id==${row.edge}`);
-            }
-          }
-          totalCost *=  Math.PI / 180 * 6378100;
-          vizVertices.filter.blendTo('0.3');
-          vizLines.filter.blendTo(path.join(' OR '));
-          console.log(`Total cost (${source} to ${target}): ${totalCost.toFixed(2)} m`);
+      if (layerLines) {
+        layerLines.remove();
+      }
 
-          computing = false;
-          restoreCursor();
-        }
+      layerLines = new carto.Layer('layer_lines', sourceLines, vizLines);
+      layerLines.addTo(map);
+      layerLines.on('loaded', () => {
+        layerLines.viz.filter.blendTo('1');
+        layerVertices.viz.filter.blendTo('0.3');
+        const totalCost = layerLines.viz.variables.totalCost.value *  Math.PI / 180 * 6378100;
+        console.log(`Total cost (${source} to ${target}): ${totalCost.toFixed(2)} m`);
+        computing = false;
+        restoreCursor();
       });
+    }
+
+    async function requestQuery(query) {
+      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
+      return await response.json();
     }
 
     function waitingCursor() {
