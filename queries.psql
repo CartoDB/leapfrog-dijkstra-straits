@@ -32,28 +32,34 @@ DECLARE
   i bigint;
   j bigint;
 BEGIN
-  -- FOR i IN 1..100 LOOP
-  --   FOR j IN i..100 LOOP
-  --   END LOOP;
-  -- END LOOP;
-  i := 24;
-  j := 52;
-  IF i = j
-  THEN
-    dist := 0.0;
-  ELSE
-    SELECT avg(agg_cost) INTO dist FROM pgr_dijkstraCost(
-       'SELECT cartodb_id AS id,
-         source,
-         target,
-         length AS cost
-         FROM madrid_ways',
-       ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = 24 LIMIT 10),
-       ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = 52 LIMIT 10),
-       directed := false
-);
-  END IF;
-  RAISE NOTICE 'dist = %', dist;
+  FOR i IN 1..100 LOOP
+    FOR j IN i..100 LOOP
+
+
+      IF i = j
+      THEN
+        INSERT INTO madrid_od_matrix VALUES (i, j, 0.0);
+      ELSE
+        BEGIN
+          SELECT avg(agg_cost) INTO dist FROM pgr_dijkstraCost(
+            'SELECT cartodb_id AS id,
+              source,
+              target,
+              length AS cost
+              FROM madrid_ways',
+            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = i LIMIT 10),
+            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = j LIMIT 10),
+            directed := false
+            );
+          INSERT INTO madrid_od_matrix VALUES (i, j, dist);
+        EXCEPTION WHEN OTHERS THEN
+          -- this happens when an array above is empty. ignore
+        END;
+      END IF;
+
+
+    END LOOP;
+  END LOOP;
 END
 $$ LANGUAGE PLPGSQL;
 
