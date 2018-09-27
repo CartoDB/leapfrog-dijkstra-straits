@@ -14,6 +14,19 @@
 </head>
 <body>
   <div id="map"></div>
+  <aside class="toolbox">
+    <div class="box">
+      <header>
+        <h1>Isolines Edges Buffer</h1>
+      </header>
+      <section>
+        <div style="display:flex;margin:12px 4px 4px 4px">
+          <p class="description open-sans" style="margin:2px 8px 2px 2px">Max cost (m)</p>
+          <input id="maxcost" type="text" value="300" style="width:120px">
+        </div>
+      </section>
+    </div>
+  </aside>
   <div id="loader">
     <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
       <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
@@ -70,7 +83,9 @@
         if (event.features.length) {
           source = event.features[0];
           source.color.blendTo('green', 0);
-          computeDrivingDistance(source.id, 0.004);
+          let maxCost = document.getElementById('maxcost').value;
+          maxCost *= 180 / Math.PI / 6378100;
+          computeDrivingDistance(source.id, maxCost);
         }
       }
     });
