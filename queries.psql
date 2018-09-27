@@ -18,3 +18,41 @@ alter table madrid_ways_vertices_pgr add column cid bigint;
 update madrid_ways mw set cid = g.cartodb_id from madrid_grid g where st_intersects(mw.the_geom, g.the_geom);
 update madrid_ways_vertices_pgr mwv set cid = g.cartodb_id from madrid_grid g where st_intersects(mwv.the_geom, g.the_geom);
 
+-- Create a table to store results
+create table madrid_od_matrix (
+  origin_cell_id bigint,
+  target_cell_id bigint,
+  length double precision
+);
+
+-- Populate the OD matrix
+DO $$
+DECLARE
+  dist double precision;
+  i bigint;
+  j bigint;
+BEGIN
+  -- FOR i IN 1..100 LOOP
+  --   FOR j IN i..100 LOOP
+  --   END LOOP;
+  -- END LOOP;
+  i := 24;
+  j := 52;
+END
+$$ LANGUAGE PLPGSQL;
+
+
+--------------------------------------------------------------------------------
+
+-- Scratch area
+
+SELECT * FROM pgr_dijkstraCost(
+    'SELECT cartodb_id AS id,
+       source,
+       target,
+       length AS cost
+       FROM madrid_ways',
+       ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = 24 LIMIT 10),
+       ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = 52 LIMIT 10),
+       directed := false
+);
