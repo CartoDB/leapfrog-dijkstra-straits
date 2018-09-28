@@ -5,15 +5,20 @@ import concurrent.futures
 import psycopg2
 
 # TODO: review this and add ip
-DB_NAME = 'cartodb_dev_user_5659debf-7f98-4403-9c63-be961436eda9_db'
-DB_USER = 'development_cartodb_user_5659debf-7f98-4403-9c63-be961436eda9'
+DB_NAME = 'cartodb_staging_user_cf537679-b5ef-491c-9f5f-6ce4cd96f134_db'
+DB_USER = 'cartodb_staging_user_cf537679-b5ef-491c-9f5f-6ce4cd96f134'
 
 MAX_WORKERS = 8
 GRID_SIZE = 20 * 20
 
 def cost_insert(i, j):
     log = logging.getLogger('cost_insert(%d,%d)' % (i,j))
-    # TODO: connection here
+    conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, host='localhost', port=6432)
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute('SELECT populate_cost(%d,%d);' % (i,j))
+    conn.close()
+
     log.info('done')
 
 async def run_cost_inserts(executor):
