@@ -13,13 +13,13 @@ WITH envelope AS (
 
 
 -- Add the cid (Cell ID) to the tables
-alter table madrid_ways add column cid bigint;
-alter table madrid_ways_vertices_pgr add column cid bigint;
-update madrid_ways mw set cid = g.cartodb_id from madrid_grid g where st_intersects(mw.the_geom, g.the_geom);
-update madrid_ways_vertices_pgr mwv set cid = g.cartodb_id from madrid_grid g where st_intersects(mwv.the_geom, g.the_geom);
+alter table madrid_ways add column cid_20 bigint;
+alter table madrid_ways_vertices_pgr add column cid_20 bigint;
+update madrid_ways mw set cid_20 = g.cartodb_id from madrid_grid_20 g where st_intersects(mw.the_geom, g.the_geom);
+update madrid_ways_vertices_pgr mwv set cid_20 = g.cartodb_id from madrid_grid_20 g where st_intersects(mwv.the_geom, g.the_geom);
 
 -- Create a table to store results
-create table madrid_od_matrix (
+create table madrid_od_matrix_20 (
   origin_cell_id bigint,
   target_cell_id bigint,
   length double precision
@@ -32,13 +32,13 @@ DECLARE
   i bigint;
   j bigint;
 BEGIN
-  FOR i IN 1..100 LOOP
-    FOR j IN i..100 LOOP
+  FOR i IN 1..400 LOOP
+    FOR j IN i..400 LOOP
 
 
       IF i = j
       THEN
-        INSERT INTO madrid_od_matrix VALUES (i, j, 0.0);
+        INSERT INTO madrid_od_matrix_20 VALUES (i, j, 0.0);
       ELSE
         BEGIN
           SELECT avg(agg_cost) INTO dist FROM pgr_dijkstraCost(
@@ -47,11 +47,11 @@ BEGIN
               target,
               length AS cost
               FROM madrid_ways',
-            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = i LIMIT 10),
-            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid = j LIMIT 10),
+            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid_20 = i LIMIT 10),
+            ARRAY(SELECT cartodb_id from madrid_ways_vertices_pgr where cid_20 = j LIMIT 10),
             directed := false
             );
-          INSERT INTO madrid_od_matrix VALUES (i, j, dist);
+          INSERT INTO madrid_od_matrix_20 VALUES (i, j, dist);
         EXCEPTION WHEN OTHERS THEN
           -- this happens when an array above is empty. ignore
         END;
