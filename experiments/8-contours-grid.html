@@ -19,6 +19,19 @@
       <header>
         <h1>Contours Grid</h1>
       </header>
+      <section>
+        <p class="description open-sans">Click on the map</p>
+        <div id="controls">
+          <ul id="content">
+            <li><span class="cell-mark" style="background-color:#006d94; border: 1px solid white;"></span><span>[0, 100)</span></li>
+            <li><span class="cell-mark" style="background-color:#00a6a5; border: 1px solid white;"></span><span>[100, 500)</span></li>
+            <li><span class="cell-mark" style="background-color:#008459; border: 1px solid white;"></span><span>[500, 1000)</span></li>
+            <li><span class="cell-mark" style="background-color:#6faa52; border: 1px solid white;"></span><span>[1000, 1500)</span></li>
+            <li><span class="cell-mark" style="background-color:#f6a62d; border: 1px solid white;"></span><span>[1500, 2000)</span></li>
+            <li><span class="cell-mark" style="background-color:#676767; border: 1px solid white;"></span><span>[2000, ∞)</span></li>
+          </ul>
+        </div>
+      </section>
     </div>
   </aside>
   <div id="loader">
@@ -111,8 +124,8 @@
         FROM cells LEFT JOIN madrid_grid ON madrid_grid.cartodb_id=cells.cid
       `);
       const vizContours = new carto.Viz(`
-        color: ramp(buckets($cost, [0, 0.001, 0.005, 0.01]), PRISM)
-        filter: animation(linear($cost, 0, 0.1), 15, fade(0.5,100)) * 0.8
+        color: ramp(buckets($cost, [${m2c(0)}, ${m2c(100)}, ${m2c(500)}, ${m2c(1000)}, ${m2c(1500)}, ${m2c(2000)}]), PRISM)
+        filter: animation(linear($cost, 0, 0.1), 30, fade(0.5,1000)) * 0.8
       `);
 
       computing = true;
@@ -128,6 +141,10 @@
         computing = false;
         restoreCursor();
       });
+    }
+
+    function m2c(value) {
+      return value / Math.PI * 180 / 6378100;
     }
 
     function waitingCursor() {

@@ -561,6 +561,16 @@ body.waiting * {
   transform: rotate(45deg);
 }
 
+.cell-mark {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  align-self: center;
+  margin-right: 12px;
+  box-sizing: border-box;
+}
+
 .line-mark {
   width: 18px;
   height: 18px;
