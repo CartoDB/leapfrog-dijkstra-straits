@@ -89,7 +89,7 @@
               SELECT v.cartodb_id AS id
               FROM madrid_ways_vertices_pgr v, madrid_grid g
               WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
-              LIMIT 40
+              LIMIT 20
             `);
             if (sourcesData.rows.length) {
               source = feature;
@@ -100,7 +100,7 @@
               SELECT v.cartodb_id AS id
               FROM madrid_ways_vertices_pgr v, madrid_grid g
               WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
-              LIMIT 40
+              LIMIT 20
             `);
             if (targetData.rows.length) {
               target = feature;
