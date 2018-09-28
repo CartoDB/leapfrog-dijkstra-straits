@@ -20,6 +20,7 @@
         <h1>Isolines Concave Hull</h1>
       </header>
       <section>
+        <p class="description open-sans">Select a node</p>
         <div style="display:flex;margin:12px 4px 4px 4px">
           <p class="description open-sans" style="margin:2px 8px 2px 2px">Max cost (m)</p>
           <input id="maxcost" type="text" value="500" style="width:120px">
@@ -88,8 +89,7 @@
           source = event.features[0];
           source.color.blendTo('green', 0);
           let maxCost = document.getElementById('maxcost').value;
-          maxCost *= 180 / Math.PI / 6378100;
-          computeDrivingDistance(source.id, maxCost);
+          computeDrivingDistance(source.id, m2c(maxCost));
         }
       }
     });
@@ -125,7 +125,7 @@
       const huevofrito = document.getElementById('huevofrito').checked;
       const vizIsoline = new carto.Viz(`
         color: ramp(top($type, 2), ${huevofrito ? '[white, yellow]' : 'PRISM'})
-        filter: ${huevofrito ? '0.8' : '0.5'} // * animation(linear($cartodb_id, 2.5, -3), 10, fade(0.5,100))
+        filter: ${huevofrito ? '0.8' : '0.5'} * animation(linear($cartodb_id, 2.5, -3), 5, fade(0.5,10000))
       `);
 
       computing = true;
@@ -141,6 +141,10 @@
         computing = false;
         restoreCursor();
       });
+    }
+
+    function m2c(value) {
+      return value * 180 / Math.PI / 6378100;
     }
 
     function waitingCursor() {

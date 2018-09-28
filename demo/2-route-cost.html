@@ -22,8 +22,6 @@
       <section>
         <p class="description open-sans">Select two nodes</p>
         <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
-        <!-- <p id="source" class="description open-sans" style="font-size: 16px;"></p>
-        <p id="target" class="description open-sans" style="font-size: 16px;"></p> -->
       </section>
     </div>
   </aside>
@@ -94,8 +92,6 @@
           source = null;
           target = null;
           document.getElementById('cost').innerHTML = '';
-          // document.getElementById('source').innerHTML = '';
-          // document.getElementById('target').innerHTML = '';
         }
       }
     });
@@ -141,13 +137,15 @@
       layerLines.on('loaded', () => {
         layerLines.viz.filter.blendTo('1');
         layerVertices.viz.filter.blendTo('0.3');
-        const totalCost = layerLines.viz.variables.totalCost.value *  Math.PI / 180 * 6378100;
+        const totalCost = c2m(layerLines.viz.variables.totalCost.value);
         document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
-        // document.getElementById('source').innerHTML = `Source: ${source}`;
-        // document.getElementById('target').innerHTML = `Target: ${target}`;
         computing = false;
         restoreCursor();
       });
+    }
+
+    function c2m(value) {
+      return value / 180 * Math.PI * 6378100;
     }
 
     function waitingCursor() {
