@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Route Cost | CARTO</title>
+  <title>Agg Shortest Path | CARTO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <!-- Include CARTO VL JS -->
@@ -17,10 +17,10 @@
   <aside class="toolbox">
     <div class="box">
       <header>
-        <h1>Route Cost</h1>
+        <h1>Agg Shortest Path</h1>
       </header>
       <section>
-        <p class="description open-sans">Select two nodes</p>
+        <p class="description open-sans">Select two cells</p>
         <p id="cost" class="description open-sans" style="font-size: 16px;"></p>
       </section>
     </div>
@@ -36,8 +36,8 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-      center: [-3.703, 40.4215],
-      zoom: 15.5
+      center: [-3.703, 40.4225],
+      zoom: 15.2
     });
 
     // const USER = 'development';
@@ -62,33 +62,57 @@
     const vizVertices = new carto.Viz('width: 15');
     const layerVertices = new carto.Layer('layer_vertices', sourceVertices, vizVertices);
 
+    const sourceGrid = new carto.source.Dataset('madrid_grid');
+    const vizGrid = new carto.Viz('filter: 0.5');
+    const layerGrid = new carto.Layer('layer_grid', sourceGrid, vizGrid);
+
     layerVertices.addTo(map, 'watername_ocean');
-    layerVertices.on('loaded', hideLoader);
+    layerGrid.addTo(map);
+
+    carto.on('loaded', [layerVertices, layerGrid], hideLoader);
 
     let source = null;
+    let sourceData = null;
     let target = null;
+    let targetData = null;
     let computing = false;
     let layerLines = null;
 
-    const interactivity = new carto.Interactivity(layerVertices);
+    const interactivity = new carto.Interactivity(layerGrid);
 
-    interactivity.on('featureClick', event => {
+    interactivity.on('featureClick', async (event) => {
       if (!computing) {
-        if (event.features.length) {
+        if (event.features.length && (!source || !target)) {
           const feature = event.features[0];
           if (!source) {
-            source = feature;
-            source.color.blendTo('green', 0);
+            sourcesData = await requestQuery(`
+              SELECT v.cartodb_id AS id
+              FROM madrid_ways_vertices_pgr v, madrid_grid g
+              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
+              LIMIT 40
+            `);
+            if (sourcesData.rows.length) {
+              source = feature;
+              source.color.blendTo('green', 0);
+            }
           } else if (!target) {
-            target = feature;
-            target.color.blendTo('blue', 0);
-            computeDijkstra(source.id, target.id);
+            targetData = await requestQuery(`
+              SELECT v.cartodb_id AS id
+              FROM madrid_ways_vertices_pgr v, madrid_grid g
+              WHERE g.cartodb_id=${feature.id} AND ST_Intersects(g.the_geom, v.the_geom)
+              LIMIT 40
+            `);
+            if (targetData.rows.length) {
+              target = feature;
+              target.color.blendTo('blue', 0);
+              computeDijkstra(sourcesData.rows.map(s => s.id), targetData.rows.map(t => t.id));
+            }
           }
-        } else if (source && target) {
-          layerLines && layerLines.viz.filter.blendTo('0');
+        } else {
+          layerLines && layerLines.viz.filter.blendTo('0', 0);
           layerVertices && layerVertices.viz.filter.blendTo('1');
-          source.color.reset(0);
-          target.color.reset(0);
+          source && source.color.reset(0);
+          target && target.color.reset(0);
           source = null;
           target = null;
           document.getElementById('cost').innerHTML = '';
@@ -96,7 +120,7 @@
       }
     });
 
-    function computeDijkstra(source, target) {
+    function computeDijkstra(sources, targets) {
       const sourceLines = new carto.source.SQL(`
         WITH path AS (
           SELECT
@@ -108,7 +132,7 @@
                target,
                length AS cost
               FROM madrid_ways',
-            ${source}, ${target},
+            ARRAY[${sources.join()}], ARRAY[${targets.join()}],
             directed := false)
         )
         SELECT
@@ -121,7 +145,7 @@
       `);
       const vizLines = new carto.Viz(`
         @totalCost: globalSum($cost)
-        width: 5
+        width: 3
         filter: 0
       `);
 
@@ -137,11 +161,18 @@
       layerLines.on('loaded', () => {
         layerLines.viz.filter.blendTo('1');
         layerVertices.viz.filter.blendTo('0.3');
-        const totalCost = c2m(layerLines.viz.variables.totalCost.value);
+        const totalCost = c2m(layerLines.viz.variables.totalCost.value) / sources.length / targets.length;
         document.getElementById('cost').innerHTML = `Cost: ${totalCost.toFixed(2)} m`;
         computing = false;
+        sourcesData = null;
+        targetData = null;
         restoreCursor();
       });
+    }
+
+    async function requestQuery(query) {
+      const response = await fetch(encodeURI(`${SERVER_URL_SQL}/api/v2/sql?q=${query}&api_key=${API_KEY}`));
+      return await response.json();
     }
 
     function c2m(value) {
