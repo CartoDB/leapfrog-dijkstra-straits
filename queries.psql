@@ -26,16 +26,10 @@ create table madrid_od_matrix_20 (
 );
 
 -- Populate the OD matrix
-DO $$
+CREATE OR REPLACE FUNCTION populate_cost(i bigint, j bigint) AS $$
 DECLARE
   dist double precision;
-  i bigint;
-  j bigint;
 BEGIN
-  FOR i IN 1..400 LOOP
-    FOR j IN i..400 LOOP
-
-
       IF i = j
       THEN
         INSERT INTO madrid_od_matrix_20 VALUES (i, j, 0.0);
@@ -57,9 +51,6 @@ BEGIN
         END;
       END IF;
 
-
-    END LOOP;
-  END LOOP;
 END
 $$ LANGUAGE PLPGSQL;
 
