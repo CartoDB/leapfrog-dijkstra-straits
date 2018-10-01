@@ -26,7 +26,7 @@ create table madrid_od_matrix_20 (
 );
 
 -- Populate the OD matrix
-CREATE OR REPLACE FUNCTION populate_cost(i bigint, j bigint) AS $$
+CREATE OR REPLACE FUNCTION populate_cost(i bigint, j bigint) RETURNS VOID AS $$
 DECLARE
   dist double precision;
 BEGIN
